@@ -1,0 +1,25 @@
+# Android Gradle project ignore
+.gradle/
+.kotlin/
+build/
+app/build/
+.idea/
+*.iml
+*.iws
+*.ipr
+local.properties
+captures/
+.externalNativeBuild
+.cxx
+*.apk
+*.aar
+*.jks
+*.keystore
+
+# macOS
+.DS_Store
+
+# User-specific
+zappmakingguide/
+tmp.html
+EroLitIcon.png
