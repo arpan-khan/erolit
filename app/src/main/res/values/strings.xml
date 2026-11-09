@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Erolit</string>
+    <string name="age_gate_title">Adults only</string>
+    <string name="age_gate_body">Erolit displays sexually explicit fiction supplied by an external service. You must be 18 or older (or the age of majority where you live) to continue. The app is unofficial and is not affiliated with the service.</string>
+    <string name="age_gate_confirm">I am 18 or older</string>
+    <string name="age_gate_exit">Exit</string>
+    <string name="legal_notice">Erolit is an unofficial, unaffiliated client. It bundles no stories or author content. Your use of the external service is governed by that service\'s terms. Sign in only with your own account.</string>
+    <string name="tab_home">Home</string>
+    <string name="tab_categories">Categories</string>
+    <string name="tab_search">Search</string>
+    <string name="tab_lists">My Lists</string>
+    <string name="tab_settings">Settings</string>
+</resources>

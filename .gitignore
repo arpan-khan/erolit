@@ -1,0 +1,78 @@
+# ---------------------------------------------------------------------------
+# Secrets and local configuration
+# ---------------------------------------------------------------------------
+keystore.properties
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+local.properties
+secrets.properties
+.env
+.env.*
+!.env.example
+
+# ---------------------------------------------------------------------------
+# Android / Gradle build output
+# ---------------------------------------------------------------------------
+.gradle/
+**/build/
+captures/
+.externalNativeBuild/
+.cxx/
+.kotlin/
+out/
+app/release/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+*.hprof
+*.jfr
+
+# Keep the Gradle wrapper JAR: it is required to build the project.
+!gradle/wrapper/gradle-wrapper.jar
+
+# ---------------------------------------------------------------------------
+# IDE and editor files
+# ---------------------------------------------------------------------------
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
+.fleet/
+.history/
+
+# ---------------------------------------------------------------------------
+# Logs and temporary files
+# ---------------------------------------------------------------------------
+*.log
+*.bak
+*~
+*.tmp
+*.swp
+hs_err_pid*
+replay_pid*
+
+# ---------------------------------------------------------------------------
+# Operating system files
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ---------------------------------------------------------------------------
+# Local research and agent tooling
+# ---------------------------------------------------------------------------
+# Raw API captures, HTML fixtures, and research notes are kept local only.
+research/
+.playwright-mcp/
+.opencode/
+opencode.json
