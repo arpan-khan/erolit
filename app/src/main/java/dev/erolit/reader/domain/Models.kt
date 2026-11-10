@@ -21,6 +21,7 @@ data class StorySummary(
     val writersPick: Boolean,
     val seriesId: Long?,
     val seriesTitle: String?,
+    val tags: List<String> = emptyList(),
 )
 
 data class PagedStories(

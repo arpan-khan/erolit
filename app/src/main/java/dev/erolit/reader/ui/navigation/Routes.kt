@@ -5,7 +5,7 @@ import android.net.Uri
 object Routes {
     const val Home = "home"
     const val Categories = "categories"
-    const val Search = "search"
+    const val Search = "search?q={q}"
     const val Lists = "lists"
     const val Settings = "settings"
 
@@ -20,4 +20,6 @@ object Routes {
     fun author(id: Long) = "author/$id"
     fun category(id: Int, name: String) = "category/$id/${Uri.encode(name)}"
     fun list(urlname: String) = "list/${Uri.encode(urlname)}"
+    fun search(query: String? = null) =
+        if (query.isNullOrBlank()) "search" else "search?q=${Uri.encode(query)}"
 }

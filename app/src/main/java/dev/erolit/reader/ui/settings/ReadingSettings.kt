@@ -5,8 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,11 +19,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.erolit.reader.AppContainer
 import dev.erolit.reader.core.settings.AppSettings
 import dev.erolit.reader.ui.components.Chip
 import dev.erolit.reader.ui.components.ChipRow
+import dev.erolit.reader.ui.reader.readerFontFamily
+import dev.erolit.reader.ui.reader.readerFontOptions
 import kotlinx.coroutines.launch
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -54,9 +60,27 @@ fun ReadingSettingsPanel(container: AppContainer, s: AppSettings) {
         )
         Text("Font", style = MaterialTheme.typography.labelLarge)
         ChipRow {
-            Chip("Serif", s.fontFamily == "serif") { scope.launch { container.settings.setFontFamily("serif") } }
-            Chip("Sans", s.fontFamily == "sans") { scope.launch { container.settings.setFontFamily("sans") } }
-            Chip("Mono", s.fontFamily == "mono") { scope.launch { container.settings.setFontFamily("mono") } }
+            readerFontOptions.forEach { option ->
+                Chip(option.label, s.fontFamily == option.id) {
+                    scope.launch { container.settings.setFontFamily(option.id) }
+                }
+            }
+        }
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+        ) {
+            Text(
+                text = "The right font makes every chapter feel like a book. " +
+                    "Adjust the size and spacing until it reads just right.",
+                fontFamily = readerFontFamily(s.fontFamily),
+                fontSize = size.sp,
+                lineHeight = (size * spacing).sp,
+                textAlign = if (s.justifyText) TextAlign.Justify else TextAlign.Start,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(14.dp),
+            )
         }
         SwitchRow("Justify text", s.justifyText) { scope.launch { container.settings.setJustify(it) } }
         SwitchRow("Keep screen on while reading", s.keepScreenOn) {

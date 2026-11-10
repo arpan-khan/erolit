@@ -45,6 +45,7 @@ fun SubmissionDto.toSummary(categoryName: String?): StorySummary = StorySummary(
     writersPick = writersPick == true,
     seriesId = series?.meta?.id,
     seriesTitle = series?.meta?.title,
+    tags = tags.orEmpty().mapNotNull { it.tag?.trim()?.takeIf(String::isNotEmpty) }.distinct(),
 )
 
 fun UserDto.toProfile(): AuthorProfile = AuthorProfile(

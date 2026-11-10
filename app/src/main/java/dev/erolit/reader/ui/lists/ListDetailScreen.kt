@@ -22,6 +22,7 @@ import dev.erolit.reader.ui.common.PagedFeed
 import dev.erolit.reader.ui.common.vmFactory
 import dev.erolit.reader.ui.components.FeedList
 import dev.erolit.reader.ui.components.ScreenHeader
+import dev.erolit.reader.ui.components.StoryAction
 import dev.erolit.reader.ui.components.StoryCard
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -85,10 +86,17 @@ fun ListDetailScreen(
             onRetry = { vm.feed.retry() },
             emptyText = "This list is empty.",
         ) { story ->
-            Column {
-                StoryCard(story = story, onClick = { onStory(story.id) })
-                TextButton(onClick = { vm.remove(story) }) { Text("Remove from list") }
-            }
+            StoryCard(
+                story = story,
+                onClick = { onStory(story.id) },
+                extraActions = listOf(
+                    StoryAction(
+                        label = "Remove from this list",
+                        supporting = list?.title,
+                        onClick = { vm.remove(story) },
+                    ),
+                ),
+            )
         }
     }
 }

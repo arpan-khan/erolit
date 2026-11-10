@@ -83,7 +83,6 @@ fun CategoryScreen(
     name: String,
     onBack: () -> Unit,
     onStory: (Long) -> Unit,
-    onAuthor: (Long) -> Unit,
 ) {
     val vm: CategoryViewModel = viewModel(
         key = "category-$categoryId",
@@ -122,11 +121,7 @@ fun CategoryScreen(
                 "No stories in this category."
             },
         ) { story ->
-            StoryCard(
-                story = story,
-                onClick = { onStory(story.id) },
-                onAuthor = story.authorId?.let { id -> { onAuthor(id) } },
-            )
+            StoryCard(story = story, onClick = { onStory(story.id) })
         }
     }
 }

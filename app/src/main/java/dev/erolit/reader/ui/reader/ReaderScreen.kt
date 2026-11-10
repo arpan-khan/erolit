@@ -1,5 +1,6 @@
 package dev.erolit.reader.ui.reader
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,16 +9,25 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -28,11 +38,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.foundation.ScrollState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -81,7 +89,7 @@ private fun splitParagraphs(raw: String): List<String> {
         .filter { it.isNotEmpty() }
 }
 
-@OptIn(FlowPreview::class)
+@OptIn(FlowPreview::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ReaderScreen(container: AppContainer, storyId: Long, onBack: () -> Unit) {
     val vm: ReaderViewModel = viewModel(
@@ -94,6 +102,7 @@ fun ReaderScreen(container: AppContainer, storyId: Long, onBack: () -> Unit) {
     var showSettings by remember { mutableStateOf(false) }
     var showSave by remember { mutableStateOf(false) }
     val view = LocalView.current
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     DisposableEffect(settings.keepScreenOn) {
         view.keepScreenOn = settings.keepScreenOn
@@ -130,16 +139,14 @@ fun ReaderScreen(container: AppContainer, storyId: Long, onBack: () -> Unit) {
                 .coerceIn(0f, 1f)
         }
     }
-    val family = when (settings.fontFamily) {
-        "sans" -> FontFamily.SansSerif
-        "mono" -> FontFamily.Monospace
-        else -> FontFamily.Serif
-    }
+    val family = readerFontFamily(settings.fontFamily)
 
     Column(modifier = Modifier.fillMaxSize()) {
         ScreenHeader(title = state.title.ifEmpty { "Story" }, onBack = onBack) {
             TextButton(onClick = { showSave = true }) { Text("Save") }
-            TextButton(onClick = { showSettings = true }) { Text("Aa") }
+            TextButton(onClick = { showSettings = true }) {
+                Text("Aa", style = MaterialTheme.typography.titleMedium)
+            }
         }
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             val err = state.error
@@ -149,61 +156,86 @@ fun ReaderScreen(container: AppContainer, storyId: Long, onBack: () -> Unit) {
                 else -> Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(scroll)
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                        .verticalScroll(scroll),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    state.author?.let {
-                        Text(
-                            text = "by $it",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 12.dp),
-                        )
-                    }
-                    paragraphs.forEach { paragraph ->
-                        Text(
-                            text = paragraph,
-                            fontSize = settings.fontSizeSp.sp,
-                            lineHeight = (settings.fontSizeSp * settings.lineHeightMultiplier).sp,
-                            fontFamily = family,
-                            textAlign = if (settings.justifyText) TextAlign.Justify else TextAlign.Start,
-                            modifier = Modifier.padding(bottom = 14.dp),
-                        )
+                    Column(
+                        modifier = Modifier
+                            .widthIn(max = 760.dp)
+                            .fillMaxWidth()
+                            .padding(horizontal = 22.dp, vertical = 12.dp),
+                    ) {
+                        state.author?.let {
+                            Text(
+                                text = "by $it",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = 14.dp),
+                            )
+                        }
+                        paragraphs.forEach { paragraph ->
+                            Text(
+                                text = paragraph,
+                                fontSize = settings.fontSizeSp.sp,
+                                lineHeight = (settings.fontSizeSp * settings.lineHeightMultiplier).sp,
+                                fontFamily = family,
+                                textAlign = if (settings.justifyText) TextAlign.Justify else TextAlign.Start,
+                                modifier = Modifier.padding(bottom = 16.dp),
+                            )
+                        }
+                        Spacer(Modifier.height(24.dp))
                     }
                 }
             }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Button(onClick = { vm.previous() }, enabled = !state.loading && state.page > 1) {
-                Text("Previous")
-            }
-            Text("Page ${state.page} of ${state.pagesCount}", style = MaterialTheme.typography.labelLarge)
-            Button(
-                onClick = { vm.next() },
-                enabled = !state.loading && state.page < state.pagesCount,
-            ) { Text("Next") }
         }
         LinearProgressIndicator(
             progress = { progress },
-            modifier = Modifier.fillMaxWidth().height(4.dp),
+            modifier = Modifier.fillMaxWidth().height(3.dp),
         )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            FilledTonalIconButton(
+                onClick = { vm.previous() },
+                enabled = !state.loading && state.page > 1,
+            ) {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous page")
+            }
+            Text(
+                text = "Page ${state.page} of ${state.pagesCount}",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            FilledTonalIconButton(
+                onClick = { vm.next() },
+                enabled = !state.loading && state.page < state.pagesCount,
+            ) {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next page")
+            }
+        }
     }
 
     if (showSettings) {
-        AlertDialog(
+        ModalBottomSheet(
             onDismissRequest = { showSettings = false },
-            confirmButton = { TextButton(onClick = { showSettings = false }) { Text("Done") } },
-            title = { Text("Reading settings") },
-            text = {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    ReadingSettingsPanel(container, settings)
-                }
-            },
-        )
+            sheetState = sheetState,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
+            ) {
+                Text("Reading settings", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(8.dp))
+                ReadingSettingsPanel(container, settings)
+            }
+        }
     }
     if (showSave) {
         SaveToListDialog(

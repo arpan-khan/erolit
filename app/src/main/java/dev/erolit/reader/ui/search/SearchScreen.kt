@@ -9,12 +9,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,11 +35,13 @@ import dev.erolit.reader.ui.components.Chip
 import dev.erolit.reader.ui.components.ChipRow
 import dev.erolit.reader.ui.components.EmptyBox
 import dev.erolit.reader.ui.components.FeedList
+import dev.erolit.reader.ui.components.ScreenHeader
 import dev.erolit.reader.ui.components.StoryCard
 
 @Composable
 fun SearchScreen(
     container: AppContainer,
+    initialQuery: String?,
     onStory: (Long) -> Unit,
     onAuthor: (Long) -> Unit,
 ) {
@@ -44,7 +52,16 @@ fun SearchScreen(
     val submitted by vm.submitted.collectAsStateWithLifecycle()
     val history by vm.history.collectAsStateWithLifecycle()
 
+    LaunchedEffect(initialQuery) {
+        val q = initialQuery?.trim().orEmpty()
+        if (q.isNotEmpty()) {
+            vm.setQuery(q)
+            vm.run()
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
+        ScreenHeader(title = "Search", onBack = null)
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -53,7 +70,15 @@ fun SearchScreen(
             OutlinedTextField(
                 value = query,
                 onValueChange = { vm.setQuery(it) },
-                label = { Text("Search") },
+                label = { Text("Search stories, poems, members") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { vm.setQuery("") }) {
+                            Icon(Icons.Default.Clear, contentDescription = "Clear search")
+                        }
+                    }
+                },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { vm.run() }),
@@ -130,11 +155,7 @@ fun SearchScreen(
                 onRetry = { vm.stories.retry() },
                 emptyText = "Nothing found. Try another word.",
             ) { story ->
-                StoryCard(
-                    story = story,
-                    onClick = { onStory(story.id) },
-                    onAuthor = story.authorId?.let { id -> { onAuthor(id) } },
-                )
+                StoryCard(story = story, onClick = { onStory(story.id) })
             }
         }
     }

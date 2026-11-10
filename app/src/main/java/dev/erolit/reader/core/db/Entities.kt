@@ -28,6 +28,7 @@ data class StoryEntity(
     val pagesCount: Int?,
     val seriesId: Long?,
     val seriesTitle: String?,
+    val tags: String?,
     val updatedAt: Long,
 )
 
@@ -89,7 +90,59 @@ data class LocalSavedEntity(
     val type: String?,
     val seriesId: Long?,
     val seriesTitle: String?,
+    val tags: String?,
     val savedAt: Long,
+)
+
+/**
+ * A series the reader saved for offline browsing. The chapter metadata lives
+ * in [LocalSeriesWorkEntity], so the series screen can render its table of
+ * contents without a network request.
+ */
+@Entity(tableName = "local_series", indices = [Index("savedAt")])
+data class LocalSeriesEntity(
+    @PrimaryKey val seriesId: Long,
+    val title: String,
+    val authorId: Long?,
+    val authorName: String?,
+    val description: String?,
+    val state: String?,
+    val workCount: Int,
+    val savedAt: Long,
+)
+
+@Entity(
+    tableName = "local_series_works",
+    primaryKeys = ["seriesId", "storyId"],
+    foreignKeys = [
+        ForeignKey(
+            entity = LocalSeriesEntity::class,
+            parentColumns = ["seriesId"],
+            childColumns = ["seriesId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("seriesId")],
+)
+data class LocalSeriesWorkEntity(
+    val seriesId: Long,
+    val storyId: Long,
+    val position: Int,
+    val slug: String?,
+    val title: String,
+    val authorId: Long?,
+    val authorName: String?,
+    val authorPic: String?,
+    val categoryId: Int?,
+    val categoryName: String?,
+    val description: String?,
+    val words: Int?,
+    val readingMinutes: Int?,
+    val rating: Double?,
+    val ratingCount: Int?,
+    val publishedAt: String?,
+    val type: String?,
+    val tags: String?,
 )
 
 @Entity(tableName = "categories")

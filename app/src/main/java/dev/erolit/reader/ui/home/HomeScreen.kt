@@ -2,6 +2,7 @@ package dev.erolit.reader.ui.home
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -29,6 +30,8 @@ import dev.erolit.reader.ui.components.EmptyBox
 import dev.erolit.reader.ui.components.ErrorBox
 import dev.erolit.reader.ui.components.FeedList
 import dev.erolit.reader.ui.components.LoadingBox
+import dev.erolit.reader.ui.components.ScreenHeader
+import dev.erolit.reader.ui.components.SeriesCard
 import dev.erolit.reader.ui.components.StoryCard
 
 @Composable
@@ -44,6 +47,7 @@ fun HomeScreen(
     val tab by vm.tab.collectAsStateWithLifecycle()
 
     Column(modifier = Modifier.fillMaxSize()) {
+        ScreenHeader(title = "Discover", onBack = null)
         TabRow(selectedTabIndex = tab.ordinal) {
             HomeTab.values().forEach { t ->
                 Tab(
@@ -62,11 +66,7 @@ fun HomeScreen(
                     onRetry = { vm.newFeed.retry() },
                     emptyText = "No stories found.",
                 ) { story ->
-                    StoryCard(
-                        story = story,
-                        onClick = { onStory(story.id) },
-                        onAuthor = story.authorId?.let { id -> { onAuthor(id) } },
-                    )
+                    StoryCard(story = story, onClick = { onStory(story.id) })
                 }
             }
             HomeTab.Top -> {
@@ -90,11 +90,7 @@ fun HomeScreen(
                     onRetry = { vm.topFeed.retry() },
                     emptyText = "No stories found.",
                 ) { story ->
-                    StoryCard(
-                        story = story,
-                        onClick = { onStory(story.id) },
-                        onAuthor = story.authorId?.let { id -> { onAuthor(id) } },
-                    )
+                    StoryCard(story = story, onClick = { onStory(story.id) })
                 }
             }
             HomeTab.Series -> {
@@ -111,46 +107,20 @@ fun HomeScreen(
                     UiState.Loading -> LoadingBox()
                     UiState.Empty -> EmptyBox("No series found.")
                     is UiState.Error -> ErrorBox(s.error, onRetry = { vm.loadSeries() })
-                    is UiState.Content -> LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    is UiState.Content -> LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(vertical = 4.dp),
+                    ) {
                         itemsIndexed(s.data) { _, item ->
-                            SeriesRow(item) { onSeries(item.id) }
+                            SeriesCard(
+                                series = item,
+                                onClick = { onSeries(item.id) },
+                                onAuthor = item.authorId?.let { id -> { onAuthor(id) } },
+                            )
                         }
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun SeriesRow(item: SeriesSummary, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClickLabel = "Open series ${item.title}", role = Role.Button, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-    ) {
-        Text(text = item.title, style = MaterialTheme.typography.titleMedium)
-        val meta = listOfNotNull(
-            item.authorName,
-            item.workCount?.let { "$it parts" },
-            item.state?.replace('_', ' '),
-        ).joinToString(" · ")
-        if (meta.isNotEmpty()) {
-            Text(
-                text = meta,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        val description = item.description
-        if (!description.isNullOrBlank()) {
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 3,
-                modifier = Modifier.padding(top = 4.dp),
-            )
         }
     }
 }

@@ -36,7 +36,10 @@ import dev.erolit.reader.R
 import dev.erolit.reader.ui.author.AuthorScreen
 import dev.erolit.reader.ui.categories.CategoriesScreen
 import dev.erolit.reader.ui.category.CategoryScreen
+import dev.erolit.reader.ui.common.LocalSavedStoryIds
+import dev.erolit.reader.ui.common.LocalStoryNavigation
 import dev.erolit.reader.ui.common.LocalStoryProgress
+import dev.erolit.reader.ui.common.StoryNavigation
 import dev.erolit.reader.ui.home.HomeScreen
 import dev.erolit.reader.ui.lists.ListDetailScreen
 import dev.erolit.reader.ui.lists.MyListsScreen
@@ -60,12 +63,26 @@ fun AppNavHost(container: AppContainer) {
     val storyProgress by progressFlow.collectAsStateWithLifecycle(
         initialValue = emptyMap<Long, dev.erolit.reader.domain.ProgressInfo>(),
     )
+    val savedFlow = remember(container) { container.stories.observeLocalSaved() }
+    val savedStoryIds by savedFlow.collectAsStateWithLifecycle(
+        initialValue = emptyList<dev.erolit.reader.domain.StorySummary>(),
+    )
+    val savedIds = remember(savedStoryIds) { savedStoryIds.map { it.id }.toSet() }
+
+    val storyNavigation = remember(navController) {
+        StoryNavigation(
+            openAuthor = { id -> navController.navigate(Routes.author(id)) },
+            openSeries = { id -> navController.navigate(Routes.series(id)) },
+            openCategory = { id, name -> navController.navigate(Routes.category(id, name)) },
+            openTag = { tag -> if (tag.isNotBlank()) navController.navigate(Routes.search(tag)) },
+        )
+    }
 
     var lastTab by remember { mutableStateOf(0) }
     val tabIndex = when {
         route == Routes.Home -> 0
         route == Routes.Categories || route.startsWith("category/") -> 1
-        route == Routes.Search -> 2
+        route.startsWith("search") -> 2
         route == Routes.Lists || route.startsWith("list/") -> 3
         route == Routes.Settings -> 4
         else -> null
@@ -76,7 +93,7 @@ fun AppNavHost(container: AppContainer) {
     val tabs = listOf(
         TabItem(Routes.Home, stringResource(R.string.tab_home), Icons.Default.Home),
         TabItem(Routes.Categories, stringResource(R.string.tab_categories), Icons.Default.Menu),
-        TabItem(Routes.Search, stringResource(R.string.tab_search), Icons.Default.Search),
+        TabItem(Routes.search(), stringResource(R.string.tab_search), Icons.Default.Search),
         TabItem(Routes.Lists, stringResource(R.string.tab_lists), Icons.Default.Person),
         TabItem(Routes.Settings, stringResource(R.string.tab_settings), Icons.Default.Settings),
     )
@@ -97,7 +114,11 @@ fun AppNavHost(container: AppContainer) {
             }
         },
     ) { innerPadding ->
-        CompositionLocalProvider(LocalStoryProgress provides storyProgress) {
+        CompositionLocalProvider(
+            LocalStoryProgress provides storyProgress,
+            LocalSavedStoryIds provides savedIds,
+            LocalStoryNavigation provides storyNavigation,
+        ) {
             NavHost(
                 navController = navController,
                 startDestination = Routes.Home,
@@ -129,12 +150,21 @@ fun AppNavHost(container: AppContainer) {
                     name = entry.arguments?.getString("name") ?: "Category",
                     onBack = { navController.popBackStack() },
                     onStory = { navController.navigate(Routes.story(it)) },
-                    onAuthor = { navController.navigate(Routes.author(it)) },
                 )
             }
-            composable(Routes.Search) {
+            composable(
+                route = Routes.Search,
+                arguments = listOf(
+                    navArgument("q") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                ),
+            ) { entry ->
                 SearchScreen(
                     container = container,
+                    initialQuery = entry.arguments?.getString("q"),
                     onStory = { navController.navigate(Routes.story(it)) },
                     onAuthor = { navController.navigate(Routes.author(it)) },
                 )
@@ -144,6 +174,7 @@ fun AppNavHost(container: AppContainer) {
                     container = container,
                     onList = { navController.navigate(Routes.list(it)) },
                     onStory = { navController.navigate(Routes.story(it)) },
+                    onSeries = { navController.navigate(Routes.series(it)) },
                 )
             }
             composable(

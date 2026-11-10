@@ -36,6 +36,8 @@ import dev.erolit.reader.core.auth.AuthState
 import dev.erolit.reader.core.net.toApiError
 import dev.erolit.reader.core.net.userMessage
 import dev.erolit.reader.data.repo.ListsRepository
+import dev.erolit.reader.domain.SeriesSummary
+import dev.erolit.reader.domain.StorySummary
 import dev.erolit.reader.domain.UserList
 import dev.erolit.reader.ui.common.UiState
 import dev.erolit.reader.ui.common.vmFactory
@@ -43,6 +45,9 @@ import dev.erolit.reader.ui.components.EmptyBox
 import dev.erolit.reader.ui.components.ErrorBox
 import dev.erolit.reader.ui.components.LoadingBox
 import dev.erolit.reader.ui.components.ScreenHeader
+import dev.erolit.reader.ui.components.SectionHeader
+import dev.erolit.reader.ui.components.SeriesCard
+import dev.erolit.reader.ui.components.StoryAction
 import dev.erolit.reader.ui.components.StoryCard
 import dev.erolit.reader.ui.login.LoginForm
 import dev.erolit.reader.ui.settings.SwitchRow
@@ -111,6 +116,7 @@ fun MyListsScreen(
     container: AppContainer,
     onList: (String) -> Unit,
     onStory: (Long) -> Unit,
+    onSeries: (Long) -> Unit,
 ) {
     var tab by remember { mutableStateOf(0) }
     Column(modifier = Modifier.fillMaxSize()) {
@@ -129,7 +135,7 @@ fun MyListsScreen(
         }
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (tab == 0) {
-                OfflineList(container, onStory)
+                OfflineList(container, onStory, onSeries)
             } else {
                 AccountLists(container, onList)
             }
@@ -138,25 +144,51 @@ fun MyListsScreen(
 }
 
 @Composable
-private fun OfflineList(container: AppContainer, onStory: (Long) -> Unit) {
-    val flow = remember { container.stories.observeLocalSaved() }
-    val saved by flow.collectAsStateWithLifecycle(initialValue = emptyList())
+private fun OfflineList(
+    container: AppContainer,
+    onStory: (Long) -> Unit,
+    onSeries: (Long) -> Unit,
+) {
+    val storiesFlow = remember { container.stories.observeLocalSaved() }
+    val seriesFlow = remember { container.stories.observeLocalSeries() }
+    val stories by storiesFlow.collectAsStateWithLifecycle(initialValue = emptyList<StorySummary>())
+    val series by seriesFlow.collectAsStateWithLifecycle(initialValue = emptyList<SeriesSummary>())
     val scope = rememberCoroutineScope()
 
-    if (saved.isEmpty()) {
-        EmptyBox("No offline entries yet. Open a story, tap Save, then choose \"Save to offline list\".")
+    if (stories.isEmpty() && series.isEmpty()) {
+        EmptyBox(
+            "Nothing saved for offline reading yet. Long-press a story and choose " +
+                "\"Save for offline reading\", or open a series and tap Save.",
+        )
     } else {
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            itemsIndexed(saved) { _, story ->
-                Column {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 16.dp),
+        ) {
+            if (series.isNotEmpty()) {
+                item { SectionHeader("Saved series") }
+                itemsIndexed(series, key = { _, item -> "series-${item.id}" }) { _, item ->
+                    SeriesCard(
+                        series = item,
+                        onClick = { onSeries(item.id) },
+                        saved = true,
+                        extraActions = listOf(
+                            StoryAction(
+                                label = "Remove from offline list",
+                                supporting = "Stops showing this series under Saved series",
+                                onClick = { scope.launch { container.stories.removeLocalSeries(item.id) } },
+                            ),
+                        ),
+                    )
+                }
+            }
+            if (stories.isNotEmpty()) {
+                item { SectionHeader("Saved stories") }
+                itemsIndexed(stories, key = { _, item -> "story-${item.id}" }) { _, story ->
                     StoryCard(
                         story = story,
                         onClick = { onStory(story.id) },
                     )
-                    TextButton(
-                        onClick = { scope.launch { container.stories.removeLocal(story.id) } },
-                        modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
-                    ) { Text("Remove from offline list") }
                 }
             }
         }

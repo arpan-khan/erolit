@@ -3,6 +3,8 @@ package dev.erolit.reader.data.repo
 import androidx.room.withTransaction
 import dev.erolit.reader.core.db.AppDatabase
 import dev.erolit.reader.core.db.LocalSavedEntity
+import dev.erolit.reader.core.db.LocalSeriesEntity
+import dev.erolit.reader.core.db.LocalSeriesWorkEntity
 import dev.erolit.reader.core.db.ProgressEntity
 import dev.erolit.reader.core.db.RecentRow
 import dev.erolit.reader.core.db.StoryEntity
@@ -18,6 +20,8 @@ import dev.erolit.reader.data.toSummary
 import dev.erolit.reader.domain.CachedStory
 import dev.erolit.reader.domain.ProgressInfo
 import dev.erolit.reader.domain.RecentReading
+import dev.erolit.reader.domain.SeriesDetail
+import dev.erolit.reader.domain.SeriesSummary
 import dev.erolit.reader.domain.StoryDetail
 import dev.erolit.reader.domain.StorySummary
 import kotlinx.coroutines.flow.Flow
@@ -153,6 +157,85 @@ class StoryRepository(
         runCatching { db.storyDao().clearAllPages() }
     }
 
+    /** Series saved for offline browsing, newest first. */
+    fun observeLocalSeries(): Flow<List<SeriesSummary>> =
+        db.localSeriesDao().observeAll().map { rows -> rows.map { it.toSummary() } }
+
+    suspend fun localSeries(seriesId: Long): SeriesDetail? = try {
+        val row = db.localSeriesDao().find(seriesId) ?: return null
+        val works = db.localSeriesDao().works(seriesId).map { it.toSummary(row.title) }
+        SeriesDetail(
+            id = row.seriesId,
+            url = null,
+            title = row.title,
+            authorName = row.authorName,
+            authorId = row.authorId,
+            description = row.description,
+            introduction = null,
+            workCount = row.workCount,
+            state = row.state,
+            works = works,
+        )
+    } catch (e: Exception) {
+        null
+    }
+
+    suspend fun isLocalSeriesSaved(seriesId: Long): Boolean = try {
+        db.localSeriesDao().find(seriesId) != null
+    } catch (e: Exception) {
+        false
+    }
+
+    suspend fun saveLocalSeries(detail: SeriesDetail) {
+        try {
+            db.withTransaction {
+                db.localSeriesDao().upsertSeries(
+                    LocalSeriesEntity(
+                        seriesId = detail.id,
+                        title = detail.title,
+                        authorId = detail.authorId,
+                        authorName = detail.authorName,
+                        description = detail.description,
+                        state = detail.state,
+                        workCount = detail.works.size.takeIf { it > 0 } ?: detail.workCount,
+                        savedAt = now(),
+                    ),
+                )
+                db.localSeriesDao().clearWorks(detail.id)
+                db.localSeriesDao().insertWorks(
+                    detail.works.mapIndexed { index, work ->
+                        LocalSeriesWorkEntity(
+                            seriesId = detail.id,
+                            storyId = work.id,
+                            position = index,
+                            slug = work.slug,
+                            title = work.title,
+                            authorId = work.authorId,
+                            authorName = work.authorName,
+                            authorPic = work.authorPic,
+                            categoryId = work.categoryId,
+                            categoryName = work.categoryName,
+                            description = work.description,
+                            words = work.words,
+                            readingMinutes = work.readingMinutes,
+                            rating = work.rating,
+                            ratingCount = work.ratingCount,
+                            publishedAt = work.publishedAt,
+                            type = work.type,
+                            tags = work.tags.encodeTags(),
+                        )
+                    },
+                )
+            }
+        } catch (e: Exception) {
+            // Saving a series is best effort; never crash the screen over it.
+        }
+    }
+
+    suspend fun removeLocalSeries(seriesId: Long) {
+        runCatching { db.localSeriesDao().delete(seriesId) }
+    }
+
     private fun StoryEntity.toSummary(): StorySummary = StorySummary(
         id = id,
         slug = slug,
@@ -174,6 +257,7 @@ class StoryRepository(
         writersPick = false,
         seriesId = seriesId,
         seriesTitle = seriesTitle,
+        tags = tags.decodeTags(),
     )
 
     private fun StorySummary.toEntity(pagesCount: Int, updatedAt: Long): StoryEntity = StoryEntity(
@@ -195,6 +279,7 @@ class StoryRepository(
         pagesCount = pagesCount,
         seriesId = seriesId,
         seriesTitle = seriesTitle,
+        tags = tags.encodeTags(),
         updatedAt = updatedAt,
     )
 
@@ -215,6 +300,7 @@ class StoryRepository(
         type = type,
         seriesId = seriesId,
         seriesTitle = seriesTitle,
+        tags = tags.encodeTags(),
         savedAt = savedAt,
     )
 
@@ -239,7 +325,51 @@ class StoryRepository(
         writersPick = false,
         seriesId = seriesId,
         seriesTitle = seriesTitle,
+        tags = tags.decodeTags(),
     )
+
+    private fun LocalSeriesEntity.toSummary(): SeriesSummary = SeriesSummary(
+        id = seriesId,
+        url = null,
+        title = title,
+        authorName = authorName,
+        authorId = authorId,
+        description = description,
+        state = state,
+        workCount = workCount,
+    )
+
+    private fun LocalSeriesWorkEntity.toSummary(seriesTitle: String): StorySummary = StorySummary(
+        id = storyId,
+        slug = slug,
+        title = title,
+        authorId = authorId,
+        authorName = authorName,
+        authorPic = authorPic,
+        categoryId = categoryId,
+        categoryName = categoryName,
+        description = description,
+        words = words,
+        readingMinutes = readingMinutes,
+        rating = rating,
+        ratingCount = ratingCount,
+        publishedAt = publishedAt,
+        type = type,
+        isHot = false,
+        isNew = false,
+        writersPick = false,
+        seriesId = seriesId,
+        seriesTitle = seriesTitle,
+        tags = tags.decodeTags(),
+    )
+
+    private fun List<String>.encodeTags(): String? =
+        map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString("\n")
+
+    private fun String?.decodeTags(): List<String> =
+        this?.split('\n')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
 
     private fun ProgressEntity.toDomain(): ProgressInfo = ProgressInfo(
         storyId = storyId,

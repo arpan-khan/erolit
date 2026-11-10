@@ -107,6 +107,30 @@ interface LocalSavedDao {
 }
 
 @Dao
+interface LocalSeriesDao {
+    @Query("SELECT * FROM local_series ORDER BY savedAt DESC")
+    fun observeAll(): Flow<List<LocalSeriesEntity>>
+
+    @Query("SELECT * FROM local_series WHERE seriesId = :seriesId")
+    suspend fun find(seriesId: Long): LocalSeriesEntity?
+
+    @Upsert
+    suspend fun upsertSeries(series: LocalSeriesEntity)
+
+    @Query("SELECT * FROM local_series_works WHERE seriesId = :seriesId ORDER BY position")
+    suspend fun works(seriesId: Long): List<LocalSeriesWorkEntity>
+
+    @Query("DELETE FROM local_series_works WHERE seriesId = :seriesId")
+    suspend fun clearWorks(seriesId: Long)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertWorks(items: List<LocalSeriesWorkEntity>)
+
+    @Query("DELETE FROM local_series WHERE seriesId = :seriesId")
+    suspend fun delete(seriesId: Long)
+}
+
+@Dao
 interface CategoryDao {
     @Query("SELECT * FROM categories ORDER BY name")
     suspend fun all(): List<CategoryEntity>
