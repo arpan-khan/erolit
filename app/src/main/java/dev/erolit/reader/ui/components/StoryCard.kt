@@ -24,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
@@ -75,6 +76,7 @@ fun StoryCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     leadingLabel: String? = null,
+    leadingMeta: String? = null,
     extraActions: List<StoryAction> = emptyList(),
 ) {
     var showActions by remember { mutableStateOf(false) }
@@ -153,7 +155,7 @@ fun StoryCard(
                 }
             }
 
-            val byline = listOfNotNull(story.authorName, story.categoryName, story.publishedAt)
+            val byline = listOfNotNull(leadingMeta, story.authorName, story.categoryName, story.publishedAt)
                 .joinToString(" · ")
             if (byline.isNotEmpty()) {
                 Text(
@@ -210,14 +212,6 @@ private fun StoryMetaRow(story: StorySummary, textAlpha: Float, modifier: Modifi
         story.words?.let {
             MetaPill(
                 text = formatCompact(it) + " words",
-                color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                alpha = textAlpha,
-            )
-        }
-        story.readingMinutes?.let {
-            MetaPill(
-                text = "$it min",
                 color = MaterialTheme.colorScheme.surfaceContainerHighest,
                 contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 alpha = textAlpha,
@@ -286,6 +280,9 @@ fun StoryActionSheet(
     val nav = LocalStoryNavigation.current
     val container = LocalAppContainer.current
     val saved = story.id in LocalSavedStoryIds.current
+    val storyProgress = LocalStoryProgress.current[story.id]
+    val isRead = storyProgress != null &&
+        (storyProgress.percent.coerceIn(0f, 1f) * 100f).roundToInt() >= 100
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -390,7 +387,7 @@ fun StoryActionSheet(
 
             ActionRow(
                 icon = if (saved) Icons.Default.Check else Icons.Default.List,
-                label = if (saved) "Remove from offline list" else "Save for offline reading",
+                label = if (saved) "Remove from local list" else "Save for local reading",
                 supporting = if (saved) {
                     "This story is stored on this device"
                 } else {
@@ -401,6 +398,22 @@ fun StoryActionSheet(
                 scope.launch {
                     if (saved) container.stories.removeLocal(story.id)
                     else container.stories.saveLocal(story)
+                }
+            }
+
+            ActionRow(
+                icon = if (isRead) Icons.Default.Close else Icons.Default.Check,
+                label = if (isRead) "Mark as unread" else "Mark as read",
+                supporting = if (isRead) {
+                    "Clear this story's reading progress"
+                } else {
+                    "Mark this story as finished"
+                },
+            ) {
+                onDismiss()
+                scope.launch {
+                    if (isRead) container.stories.markStoryUnread(story.id)
+                    else container.stories.markStoryRead(story.id)
                 }
             }
 

@@ -52,10 +52,11 @@ fun CategoriesScreen(container: AppContainer, onCategory: (Int, String) -> Unit)
             UiState.Empty -> EmptyBox("No categories available.")
             is UiState.Error -> ErrorBox(s.error, onRetry = { attempt += 1 })
             is UiState.Content -> LazyColumn(modifier = Modifier.fillMaxSize()) {
-                itemsIndexed(s.data) { _, category ->
+                itemsIndexed(s.data, key = { _, category -> category.id }) { _, category ->
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .animateItem()
                             .clickable(
                                 onClickLabel = "Open category ${category.name}",
                                 role = Role.Button,

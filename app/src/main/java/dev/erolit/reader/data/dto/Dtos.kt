@@ -61,7 +61,7 @@ data class TagDto(
 @Serializable
 data class AuthorRefDto(
     val userid: Long? = null,
-    val username: String? = null,
+    @Serializable(with = LenientTextSerializer::class) val username: String? = null,
     val userpic: String? = null,
 )
 
@@ -123,7 +123,7 @@ data class SubmissionDto(
     val url: String? = null,
     val type: String? = null,
     val author: AuthorRefDto? = null,
-    val authorname: String? = null,
+    @Serializable(with = LenientTextSerializer::class) val authorname: String? = null,
     val category: Int? = null,
     @SerialName("category_info") val categoryInfo: CategoryRefDto? = null,
     val tags: List<TagDto>? = null,

@@ -21,6 +21,8 @@ class CategoryCache {
 
     fun nameFor(id: Int?): String? = id?.let { byId[it]?.name }
 
+    fun pageUrlFor(id: Int?): String? = id?.let { byId[it]?.pageUrl }
+
     fun clear() {
         ordered = emptyList()
         byId = emptyMap()

@@ -1,18 +1,27 @@
 package dev.erolit.reader.ui.lists
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -26,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -36,6 +46,7 @@ import dev.erolit.reader.core.auth.AuthState
 import dev.erolit.reader.core.net.toApiError
 import dev.erolit.reader.core.net.userMessage
 import dev.erolit.reader.data.repo.ListsRepository
+import dev.erolit.reader.domain.AuthorProfile
 import dev.erolit.reader.domain.SeriesSummary
 import dev.erolit.reader.domain.StorySummary
 import dev.erolit.reader.domain.UserList
@@ -56,6 +67,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MyListsViewModel(private val repo: ListsRepository) : ViewModel() {
     private val _state = MutableStateFlow<UiState<List<UserList>>>(UiState.Loading)
@@ -117,6 +131,7 @@ fun MyListsScreen(
     onList: (String) -> Unit,
     onStory: (Long) -> Unit,
     onSeries: (Long) -> Unit,
+    onAuthor: (Long) -> Unit,
 ) {
     var tab by remember { mutableStateOf(0) }
     Column(modifier = Modifier.fillMaxSize()) {
@@ -125,40 +140,54 @@ fun MyListsScreen(
             Tab(
                 selected = tab == 0,
                 onClick = { tab = 0 },
-                text = { Text("Offline") },
+                text = { Text("Local") },
             )
             Tab(
                 selected = tab == 1,
                 onClick = { tab = 1 },
+                text = { Text("History") },
+            )
+            Tab(
+                selected = tab == 2,
+                onClick = { tab = 2 },
                 text = { Text("Account") },
             )
         }
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            if (tab == 0) {
-                OfflineList(container, onStory, onSeries)
-            } else {
-                AccountLists(container, onList)
+        Crossfade(
+            targetState = tab,
+            animationSpec = tween(durationMillis = 180),
+            label = "my-lists-tab",
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+        ) { selected ->
+            when (selected) {
+                0 -> LocalList(container, onStory, onSeries, onAuthor)
+                1 -> HistoryList(container, onStory)
+                else -> AccountLists(container, onList)
             }
         }
     }
 }
 
 @Composable
-private fun OfflineList(
+private fun LocalList(
     container: AppContainer,
     onStory: (Long) -> Unit,
     onSeries: (Long) -> Unit,
+    onAuthor: (Long) -> Unit,
 ) {
     val storiesFlow = remember { container.stories.observeLocalSaved() }
     val seriesFlow = remember { container.stories.observeLocalSeries() }
+    val authorsFlow = remember { container.authors.observeLocalAuthors() }
     val stories by storiesFlow.collectAsStateWithLifecycle(initialValue = emptyList<StorySummary>())
     val series by seriesFlow.collectAsStateWithLifecycle(initialValue = emptyList<SeriesSummary>())
+    val authors by authorsFlow.collectAsStateWithLifecycle(initialValue = emptyList<AuthorProfile>())
     val scope = rememberCoroutineScope()
 
-    if (stories.isEmpty() && series.isEmpty()) {
+    if (stories.isEmpty() && series.isEmpty() && authors.isEmpty()) {
         EmptyBox(
-            "Nothing saved for offline reading yet. Long-press a story and choose " +
-                "\"Save for offline reading\", or open a series and tap Save.",
+            "Nothing saved for local reading yet. Long-press a story and choose " +
+                "\"Save for local reading\", open a series and tap Save, or save an author " +
+                "from their profile.",
         )
     } else {
         LazyColumn(
@@ -166,15 +195,16 @@ private fun OfflineList(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 16.dp),
         ) {
             if (series.isNotEmpty()) {
-                item { SectionHeader("Saved series") }
+                item(key = "header-series") { SectionHeader("Saved series") }
                 itemsIndexed(series, key = { _, item -> "series-${item.id}" }) { _, item ->
                     SeriesCard(
                         series = item,
                         onClick = { onSeries(item.id) },
+                        modifier = Modifier.animateItem(),
                         saved = true,
                         extraActions = listOf(
                             StoryAction(
-                                label = "Remove from offline list",
+                                label = "Remove from local list",
                                 supporting = "Stops showing this series under Saved series",
                                 onClick = { scope.launch { container.stories.removeLocalSeries(item.id) } },
                             ),
@@ -183,17 +213,134 @@ private fun OfflineList(
                 }
             }
             if (stories.isNotEmpty()) {
-                item { SectionHeader("Saved stories") }
+                item(key = "header-stories") { SectionHeader("Saved stories") }
                 itemsIndexed(stories, key = { _, item -> "story-${item.id}" }) { _, story ->
                     StoryCard(
                         story = story,
                         onClick = { onStory(story.id) },
+                        modifier = Modifier.animateItem(),
+                    )
+                }
+            }
+            if (authors.isNotEmpty()) {
+                item(key = "header-authors") { SectionHeader("Saved authors") }
+                itemsIndexed(authors, key = { _, author -> "author-${author.id}" }) { _, author ->
+                    AuthorCard(
+                        author = author,
+                        onClick = { onAuthor(author.id) },
+                        onRemove = { scope.launch { container.authors.removeLocalAuthor(author.id) } },
+                        modifier = Modifier.animateItem(),
                     )
                 }
             }
         }
     }
 }
+
+@Composable
+private fun HistoryList(
+    container: AppContainer,
+    onStory: (Long) -> Unit,
+) {
+    val historyFlow = remember { container.stories.observeHistory() }
+    val history by historyFlow.collectAsStateWithLifecycle(
+        initialValue = emptyList<dev.erolit.reader.domain.HistoryEntry>(),
+    )
+
+    if (history.isEmpty()) {
+        EmptyBox("No reading history yet. Stories you open will appear here.")
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 4.dp, bottom = 16.dp),
+        ) {
+            itemsIndexed(history, key = { _, entry -> "history-${entry.story.id}" }) { _, entry ->
+                StoryCard(
+                    story = entry.story,
+                    onClick = { onStory(entry.story.id) },
+                    leadingMeta = remember(entry.openedAt) { formatOpenedAt(entry.openedAt) },
+                    modifier = Modifier.animateItem(),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AuthorCard(
+    author: AuthorProfile,
+    onClick: () -> Unit,
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .clickable(
+                onClickLabel = "Open author ${author.username}",
+                role = Role.Button,
+                onClick = onClick,
+            ),
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = author.username.trim().firstOrNull()?.uppercase() ?: "A",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = author.username,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                val meta = listOfNotNull(
+                    author.storiesCount?.let { "$it stories" },
+                    author.seriesCount?.let { "$it series" },
+                    author.followers?.let { "$it followers" },
+                ).joinToString(" · ")
+                if (meta.isNotEmpty()) {
+                    Text(
+                        text = meta,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                val bio = author.bio
+                if (!bio.isNullOrBlank()) {
+                    Text(
+                        text = bio.trim(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 3.dp),
+                    )
+                }
+            }
+            TextButton(onClick = onRemove) { Text("Remove") }
+        }
+    }
+}
+
+private fun formatOpenedAt(millis: Long): String =
+    SimpleDateFormat("d MMM yyyy, HH:mm", Locale.getDefault()).format(Date(millis))
 
 @Composable
 private fun AccountLists(container: AppContainer, onList: (String) -> Unit) {

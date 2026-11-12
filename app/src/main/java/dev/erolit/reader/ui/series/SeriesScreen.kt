@@ -3,9 +3,11 @@ package dev.erolit.reader.ui.series
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,18 +31,23 @@ import dev.erolit.reader.core.net.toApiError
 import dev.erolit.reader.data.repo.SeriesRepository
 import dev.erolit.reader.data.repo.StoryRepository
 import dev.erolit.reader.domain.SeriesDetail
+import dev.erolit.reader.ui.common.LocalStoryProgress
 import dev.erolit.reader.ui.common.UiState
+import dev.erolit.reader.ui.common.WebTarget
 import dev.erolit.reader.ui.common.vmFactory
 import dev.erolit.reader.ui.components.EmptyBox
 import dev.erolit.reader.ui.components.ErrorBox
 import dev.erolit.reader.ui.components.LoadingBox
 import dev.erolit.reader.ui.components.ScreenHeader
+import dev.erolit.reader.ui.components.SeriesProgressBadge
 import dev.erolit.reader.ui.components.StoryCard
+import dev.erolit.reader.ui.components.WebButton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 class SeriesViewModel(
     private val repo: SeriesRepository,
@@ -61,7 +68,7 @@ class SeriesViewModel(
         viewModelScope.launch {
             val local = stories.localSeries(seriesId)
             if (local != null) {
-                // Show the offline copy immediately, then refresh it quietly.
+                // Show the local copy immediately, then refresh it quietly.
                 _state.value = UiState.Content(local)
                 _saved.value = true
             } else {
@@ -113,6 +120,15 @@ fun SeriesScreen(
     Column(modifier = Modifier.fillMaxSize()) {
         val detail = (state as? UiState.Content<SeriesDetail>)?.data
         ScreenHeader(title = detail?.title ?: "Series", onBack = onBack) {
+            val slug = seriesSlug(detail?.url)
+            if (detail != null && slug != null) {
+                WebButton(
+                    WebTarget(
+                        url = container.routes.seriesWebUrl(slug),
+                        title = detail.title,
+                    ),
+                )
+            }
             if (detail != null) {
                 TextButton(onClick = { vm.toggleSaved(detail) }) {
                     Text(if (saved) "Saved" else "Save")
@@ -150,6 +166,7 @@ fun SeriesScreen(
                             story = story,
                             onClick = { onStory(story.id) },
                             leadingLabel = "${index + 1}",
+                            modifier = Modifier.animateItem(),
                         )
                     }
                 }
@@ -165,6 +182,15 @@ private fun SeriesInfo(
     onToggleSaved: () -> Unit,
     onAuthor: (Long) -> Unit,
 ) {
+    val progress = LocalStoryProgress.current
+    val percent = series.works.takeIf { it.isNotEmpty() }?.let { works ->
+        val total = works.sumOf { story ->
+            (progress[story.id]?.percent?.coerceIn(0f, 1f) ?: 0f).toDouble()
+        }
+        ((total / works.size) * 100.0).roundToInt().coerceIn(0, 100)
+    }?.takeIf { it > 0 }
+    val completed = percent != null && percent >= 100
+
     Surface(
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
@@ -186,10 +212,14 @@ private fun SeriesInfo(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                if (percent != null) {
+                    SeriesProgressBadge(percent = percent, completed = completed)
+                }
                 if (saved) {
+                    Spacer(Modifier.width(8.dp))
                     AssistChip(
                         onClick = onToggleSaved,
-                        label = { Text("Saved offline") },
+                        label = { Text("Saved locally") },
                     )
                 }
             }
@@ -214,4 +244,19 @@ private fun SeriesInfo(
             }
         }
     }
+}
+
+/**
+ * The API can return either a bare slug or a full page URL. The website URL
+ * builder only needs the final path segment.
+ */
+private fun seriesSlug(raw: String?): String? {
+    val value = raw
+        ?.trim()
+        ?.substringBefore('?')
+        ?.substringBefore('#')
+        ?.trimEnd('/')
+        ?.takeIf { it.isNotEmpty() }
+        ?: return null
+    return value.substringAfterLast('/').ifBlank { value }
 }

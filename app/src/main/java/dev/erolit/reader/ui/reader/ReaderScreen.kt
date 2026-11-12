@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -40,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -53,9 +55,11 @@ import dev.erolit.reader.core.net.userMessage
 import dev.erolit.reader.core.settings.AppSettings
 import dev.erolit.reader.domain.UserList
 import dev.erolit.reader.ui.common.vmFactory
+import dev.erolit.reader.ui.common.WebTarget
 import dev.erolit.reader.ui.components.ErrorBox
 import dev.erolit.reader.ui.components.LoadingBox
 import dev.erolit.reader.ui.components.ScreenHeader
+import dev.erolit.reader.ui.components.WebButton
 import dev.erolit.reader.ui.settings.ReadingSettingsPanel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
@@ -63,8 +67,16 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-private fun ScrollState.fraction(): Float = when {
-    maxValue in 1 until Int.MAX_VALUE -> (value / maxValue.toFloat()).coerceIn(0f, 1f)
+private fun ScrollState.fraction(endPaddingPx: Float): Float = when {
+    maxValue in 1 until Int.MAX_VALUE -> {
+        // The reader keeps a little padding below the last paragraph so the
+        // text does not sit flush against the progress bar. Count that padding
+        // as part of the page: when the last line reaches the bottom of the
+        // viewport the reader has finished the page even though the scroll
+        // container can still move a few pixels further.
+        val effectiveMax = (maxValue - endPaddingPx).coerceAtLeast(1f)
+        (value / effectiveMax).coerceIn(0f, 1f)
+    }
     // A page shorter than the screen cannot scroll. Once actually laid out,
     // that means the whole page is visible, so it counts as fully read.
     maxValue == 0 && viewportSize > 0 -> 1f
@@ -99,6 +111,13 @@ fun ReaderScreen(container: AppContainer, storyId: Long, onBack: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
     val settings by container.settings.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
     val scroll = rememberScrollState()
+    val endPaddingPx = with(LocalDensity.current) { 16.dp.toPx() }
+    val screenActive = remember { mutableStateOf(true) }
+    // Last fraction observed while the reader was actually visible. Saving
+    // this instead of recomputing on dispose prevents the viewport change
+    // caused by the returning bottom bar from lowering the saved percentage.
+    val latestFraction = remember { mutableStateOf(0f) }
+    val reachedEnd = remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var showSave by remember { mutableStateOf(false) }
     val view = LocalView.current
@@ -117,32 +136,79 @@ fun ReaderScreen(container: AppContainer, storyId: Long, onBack: () -> Unit) {
             .first { (viewport, max) -> viewport > 0 && max != Int.MAX_VALUE }
         if (state.restoreFraction > 0f && scroll.maxValue > 0) {
             scroll.scrollTo((state.restoreFraction * scroll.maxValue).toInt())
+            latestFraction.value = state.restoreFraction
+            if (state.page >= state.pagesCount && state.restoreFraction >= 0.999f) {
+                reachedEnd.value = true
+                vm.markCompleted()
+            }
         } else {
             scroll.scrollTo(0)
+            latestFraction.value = 0f
         }
+    }
+
+    // Track the fraction as the reader scrolls. It is recomputed whenever the
+    // layout changes too, so a page that fits entirely on screen (maxValue 0)
+    // still counts as read. Completion is sticky, so a viewport resize during
+    // teardown can no longer lower a finished chapter.
+    LaunchedEffect(Unit) {
+        snapshotFlow { Triple(scroll.value, scroll.maxValue, scroll.isScrollInProgress) }
+            .collect { (_, _, _) ->
+                if (!screenActive.value) return@collect
+                val fraction = scroll.fraction(endPaddingPx)
+                latestFraction.value = fraction
+                if (!reachedEnd.value &&
+                    state.page >= state.pagesCount &&
+                    fraction >= 0.999f
+                ) {
+                    // Reaching the end of the last page forces every later
+                    // save to 100%, including the one made while the screen
+                    // is being torn down.
+                    reachedEnd.value = true
+                    vm.markCompleted()
+                }
+            }
     }
 
     LaunchedEffect(Unit) {
         snapshotFlow { scroll.value }
             .debounce(1000)
-            .collect { vm.saveScroll(scroll.fraction()) }
+            .collect {
+                // Ignore a debounced write that arrives while the screen is
+                // being torn down; the onDispose write below is the final one.
+                if (screenActive.value) {
+                    vm.saveScroll(if (reachedEnd.value) 1f else latestFraction.value)
+                }
+            }
     }
 
     DisposableEffect(Unit) {
-        onDispose { vm.saveScroll(scroll.fraction()) }
+        onDispose {
+            screenActive.value = false
+            vm.saveScroll(if (reachedEnd.value) 1f else latestFraction.value)
+        }
     }
 
     val paragraphs = remember(state.text) { splitParagraphs(state.text) }
-    val progress by remember(state.page, state.pagesCount) {
+    val progress by remember(state.page, state.pagesCount, endPaddingPx) {
         derivedStateOf {
-            (((state.page - 1) + scroll.fraction()) / state.pagesCount.coerceAtLeast(1))
+            (((state.page - 1) + scroll.fraction(endPaddingPx)) / state.pagesCount.coerceAtLeast(1))
                 .coerceIn(0f, 1f)
         }
     }
     val family = readerFontFamily(settings.fontFamily)
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         ScreenHeader(title = state.title.ifEmpty { "Story" }, onBack = onBack) {
+            val slug = state.summary?.slug
+            if (!slug.isNullOrBlank()) {
+                WebButton(
+                    WebTarget(
+                        url = container.routes.storyWebUrl(slug),
+                        title = state.title.ifBlank { "Story" },
+                    ),
+                )
+            }
             TextButton(onClick = { showSave = true }) { Text("Save") }
             TextButton(onClick = { showSettings = true }) {
                 Text("Aa", style = MaterialTheme.typography.titleMedium)
@@ -173,17 +239,21 @@ fun ReaderScreen(container: AppContainer, storyId: Long, onBack: () -> Unit) {
                                 modifier = Modifier.padding(bottom = 14.dp),
                             )
                         }
-                        paragraphs.forEach { paragraph ->
+                        paragraphs.forEachIndexed { index, paragraph ->
                             Text(
                                 text = paragraph,
                                 fontSize = settings.fontSizeSp.sp,
                                 lineHeight = (settings.fontSizeSp * settings.lineHeightMultiplier).sp,
                                 fontFamily = family,
                                 textAlign = if (settings.justifyText) TextAlign.Justify else TextAlign.Start,
-                                modifier = Modifier.padding(bottom = 16.dp),
+                                // Do not add trailing space after the final
+                                // paragraph; the progress calculation treats
+                                // the end of the text as the end of the page.
+                                modifier = Modifier.padding(
+                                    bottom = if (index == paragraphs.lastIndex) 0.dp else 16.dp,
+                                ),
                             )
                         }
-                        Spacer(Modifier.height(24.dp))
                     }
                 }
             }
@@ -241,9 +311,9 @@ fun ReaderScreen(container: AppContainer, storyId: Long, onBack: () -> Unit) {
         SaveToListDialog(
             container = container,
             storyId = storyId,
-            savedOffline = state.savedOffline,
-            onSaveOffline = { vm.saveOffline() },
-            onRemoveOffline = { vm.removeOffline() },
+            savedLocally = state.savedLocally,
+            onSaveLocally = { vm.saveLocally() },
+            onRemoveLocally = { vm.removeLocally() },
             onDismiss = { showSave = false },
         )
     }
@@ -253,9 +323,9 @@ fun ReaderScreen(container: AppContainer, storyId: Long, onBack: () -> Unit) {
 private fun SaveToListDialog(
     container: AppContainer,
     storyId: Long,
-    savedOffline: Boolean,
-    onSaveOffline: () -> Unit,
-    onRemoveOffline: () -> Unit,
+    savedLocally: Boolean,
+    onSaveLocally: () -> Unit,
+    onRemoveLocally: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val auth by container.session.state.collectAsStateWithLifecycle()
@@ -289,9 +359,9 @@ private fun SaveToListDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 TextButton(
-                    onClick = { if (savedOffline) onRemoveOffline() else onSaveOffline() },
+                    onClick = { if (savedLocally) onRemoveLocally() else onSaveLocally() },
                 ) {
-                    Text(if (savedOffline) "Remove from offline list" else "Save to offline list")
+                    Text(if (savedLocally) "Remove from local list" else "Save to local list")
                 }
 
                 Spacer(Modifier.height(12.dp))

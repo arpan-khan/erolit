@@ -4,6 +4,7 @@ import android.content.Context
 import coil.ImageLoader
 import dev.erolit.reader.core.auth.KeystoreSecretStore
 import dev.erolit.reader.core.auth.SessionRepository
+import dev.erolit.reader.core.backup.BackupManager
 import dev.erolit.reader.core.db.AppDatabase
 import dev.erolit.reader.core.net.ApiClient
 import dev.erolit.reader.core.net.ApiConfig
@@ -12,6 +13,7 @@ import dev.erolit.reader.core.net.RateLimiter
 import dev.erolit.reader.core.net.RequestLog
 import dev.erolit.reader.core.net.UserAgent
 import dev.erolit.reader.core.settings.SettingsRepository
+import dev.erolit.reader.core.update.UpdateChecker
 import dev.erolit.reader.data.repo.AuthorRepository
 import dev.erolit.reader.data.repo.CatalogRepository
 import dev.erolit.reader.data.repo.CategoryCache
@@ -34,12 +36,14 @@ class AppContainer(context: Context) {
 
     val settings = SettingsRepository(context)
     val db = AppDatabase.build(context)
+    val backup = BackupManager(db, settings)
     val requestLog = RequestLog()
     val rateLimiter = RateLimiter(minIntervalMs = 1_000L)
 
     val apiConfig = ApiConfig()
     val routes = ApiRoutes(apiConfig)
     val apiClient = ApiClient(rateLimiter = rateLimiter, requestLog = requestLog)
+    val updateChecker = UpdateChecker(apiClient)
 
     val secretStore = KeystoreSecretStore(context)
     val session = SessionRepository(
@@ -54,7 +58,7 @@ class AppContainer(context: Context) {
     val catalog = CatalogRepository(apiClient, routes, db, categoryCache)
     val stories = StoryRepository(apiClient, routes, db)
     val series = SeriesRepository(apiClient, routes, categoryCache)
-    val authors = AuthorRepository(apiClient, routes, categoryCache)
+    val authors = AuthorRepository(apiClient, routes, categoryCache, db)
     val search = SearchRepository(apiClient, routes, categoryCache, db)
     val lists = ListsRepository(apiClient, routes, categoryCache)
 
@@ -102,6 +106,7 @@ class AppContainer(context: Context) {
             db.storyDao().clearAllPages()
             db.progressDao().clear()
             db.searchHistoryDao().clear()
+            db.historyDao().clear()
             db.categoryDao().clear()
         }
         categoryCache.clear()

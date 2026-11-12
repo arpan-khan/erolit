@@ -86,6 +86,7 @@ fun SeriesDto.toSummary(): SeriesSummary = SeriesSummary(
     description = description ?: introduction,
     state = state,
     workCount = workCount ?: works?.size,
+    workIds = works.orEmpty().mapNotNull { it.id },
 )
 
 fun SeriesCardDto.toSummary(): SeriesSummary = SeriesSummary(
@@ -97,6 +98,7 @@ fun SeriesCardDto.toSummary(): SeriesSummary = SeriesSummary(
     description = description,
     state = state,
     workCount = workCount ?: works?.size,
+    workIds = works.orEmpty().mapNotNull { it.id },
 )
 
 fun categoryLabel(id: Int?, slug: String?, names: Map<Int, String>): String? {

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -40,12 +41,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.erolit.reader.R
 import dev.erolit.reader.core.net.ApiError
 import dev.erolit.reader.core.net.userMessage
 import dev.erolit.reader.ui.common.FeedState
+import dev.erolit.reader.ui.common.LocalOpenWeb
+import dev.erolit.reader.ui.common.WebTarget
 
 @Composable
 fun LoadingBox(modifier: Modifier = Modifier) {
@@ -162,9 +167,45 @@ fun ScreenHeader(
     }
 }
 
+/**
+ * A globe button that opens the matching page of the upstream website in the
+ * in-app WebView. Place it in a [ScreenHeader] action slot.
+ */
 @Composable
-fun SectionHeader(title: String, modifier: Modifier = Modifier) {
-    Text(
+fun WebButton(target: WebTarget, modifier: Modifier = Modifier) {
+    val openWeb = LocalOpenWeb.current
+    IconButton(onClick = { openWeb(target) }, modifier = modifier) {
+        Icon(
+            painter = painterResource(R.drawable.ic_globe),
+            contentDescription = "Open on the website",
+        )
+    }
+}
+
+/**
+ * The same action as a filled button for warning cards, where the user needs
+ * an obvious way to leave the app's limited view.
+ */
+@Composable
+fun WebActionButton(
+    target: WebTarget,
+    label: String = "Open website",
+    modifier: Modifier = Modifier,
+) {
+    val openWeb = LocalOpenWeb.current
+    Button(onClick = { openWeb(target) }, modifier = modifier) {
+        Icon(
+            painter = painterResource(R.drawable.ic_globe),
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(label)
+    }
+}
+
+@Composable
+fun SectionHeader(title: String, modifier: Modifier = Modifier) {    Text(
         text = title,
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.primary,
@@ -201,13 +242,23 @@ fun <T> FeedList(
     onRetry: () -> Unit,
     emptyText: String,
     modifier: Modifier = Modifier,
+    header: (@Composable () -> Unit)? = null,
     itemContent: @Composable (T) -> Unit,
 ) {
     val err = state.error
     when {
-        !state.started || (state.loading && state.items.isEmpty()) -> LoadingBox(modifier)
-        err != null && state.items.isEmpty() -> ErrorBox(err, onRetry, modifier)
-        state.items.isEmpty() -> EmptyBox(emptyText, modifier)
+        !state.started || (state.loading && state.items.isEmpty()) -> Column(modifier.fillMaxSize()) {
+            header?.invoke()
+            LoadingBox(Modifier.weight(1f))
+        }
+        err != null && state.items.isEmpty() -> Column(modifier.fillMaxSize()) {
+            header?.invoke()
+            ErrorBox(err, onRetry, Modifier.weight(1f))
+        }
+        state.items.isEmpty() -> Column(modifier.fillMaxSize()) {
+            header?.invoke()
+            EmptyBox(emptyText, Modifier.weight(1f))
+        }
         else -> {
             val listState = rememberLazyListState()
             val nearEnd by remember {
@@ -225,7 +276,14 @@ fun <T> FeedList(
                 state = listState,
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp),
             ) {
-                itemsIndexed(state.items) { _, item -> itemContent(item) }
+                if (header != null) {
+                    item(key = "feed-header") { header() }
+                }
+                itemsIndexed(state.items) { _, item ->
+                    Box(modifier = Modifier.animateItem()) {
+                        itemContent(item)
+                    }
+                }
                 if (state.loadingMore) {
                     item {
                         Box(

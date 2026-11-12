@@ -1,5 +1,7 @@
 package dev.erolit.reader.ui.home
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -57,7 +59,14 @@ fun HomeScreen(
                 )
             }
         }
-        when (tab) {
+        Crossfade(
+            targetState = tab,
+            animationSpec = tween(durationMillis = 180),
+            label = "home-tab",
+            modifier = Modifier.weight(1f),
+        ) { current ->
+            Column(modifier = Modifier.fillMaxSize()) {
+            when (current) {
             HomeTab.New -> {
                 val state by vm.newFeed.state.collectAsStateWithLifecycle()
                 FeedList(
@@ -116,11 +125,14 @@ fun HomeScreen(
                                 series = item,
                                 onClick = { onSeries(item.id) },
                                 onAuthor = item.authorId?.let { id -> { onAuthor(id) } },
+                                modifier = Modifier.animateItem(),
                             )
                         }
                     }
                 }
             }
+            }
         }
     }
+}
 }

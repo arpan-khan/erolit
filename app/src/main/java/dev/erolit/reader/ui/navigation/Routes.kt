@@ -14,6 +14,7 @@ object Routes {
     const val Author = "author/{authorId}"
     const val Category = "category/{categoryId}/{name}"
     const val ListDetail = "list/{urlname}"
+    const val Web = "web?url={url}&title={title}"
 
     fun story(id: Long) = "story/$id"
     fun series(id: Long) = "series/$id"
@@ -22,4 +23,8 @@ object Routes {
     fun list(urlname: String) = "list/${Uri.encode(urlname)}"
     fun search(query: String? = null) =
         if (query.isNullOrBlank()) "search" else "search?q=${Uri.encode(query)}"
+    fun web(url: String, title: String? = null): String {
+        val base = "web?url=${Uri.encode(url)}"
+        return if (title.isNullOrBlank()) base else "$base&title=${Uri.encode(title)}"
+    }
 }

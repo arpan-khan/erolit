@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.CircularProgressIndicator
@@ -56,7 +57,9 @@ fun <T : Any> PagedLazyColumn(
         state = listState,
     ) {
         itemsIndexed(items, key = { _, item -> item.toString() }) { index, item ->
-            itemContent(index, item)
+            Box(modifier = Modifier.animateItem()) {
+                itemContent(index, item)
+            }
         }
         if (isLoadingMore && !endReached) {
             item {

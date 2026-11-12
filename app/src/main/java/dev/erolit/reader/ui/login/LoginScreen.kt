@@ -26,6 +26,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import dev.erolit.reader.AppContainer
 import dev.erolit.reader.core.auth.LoginOutcome
+import dev.erolit.reader.ui.common.WebTarget
+import dev.erolit.reader.ui.components.WebActionButton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -70,6 +72,20 @@ fun LoginForm(container: AppContainer, notice: String? = null) {
         error?.let {
             Spacer(Modifier.height(8.dp))
             Text(it, color = MaterialTheme.colorScheme.error)
+            if (it == BROWSER_CHECK_MESSAGE) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "Open the sign-in page on the website, complete the check there, " +
+                        "then come back and try again.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                WebActionButton(
+                    target = WebTarget(container.routes.loginFormUrl(), "Sign in"),
+                    label = "Open sign-in page",
+                )
+            }
         }
         Spacer(Modifier.height(16.dp))
         Button(
@@ -96,3 +112,7 @@ fun LoginForm(container: AppContainer, notice: String? = null) {
         }
     }
 }
+
+/** Exact message returned by the login service when it wants a browser check. */
+private const val BROWSER_CHECK_MESSAGE =
+    "The sign-in service asked for a browser check. Please try again later."

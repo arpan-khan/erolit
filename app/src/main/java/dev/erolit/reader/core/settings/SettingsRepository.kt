@@ -33,6 +33,8 @@ data class AppSettings(
     val ageConfirmed: Boolean = false,
     val imageLoading: String = "wifiOnly",
     val slowMode: Boolean = false,
+    /** Release tag the user chose not to be reminded about again. */
+    val ignoredUpdateVersion: String? = null,
 )
 
 class SettingsRepository(private val context: Context) {
@@ -52,6 +54,7 @@ class SettingsRepository(private val context: Context) {
         val ageConfirmed = booleanPreferencesKey("age_confirmed")
         val imageLoading = stringPreferencesKey("image_loading")
         val slowMode = booleanPreferencesKey("slow_mode")
+        val ignoredUpdateVersion = stringPreferencesKey("ignored_update_version")
     }
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data
@@ -76,6 +79,7 @@ class SettingsRepository(private val context: Context) {
                 ageConfirmed = prefs[Keys.ageConfirmed] ?: defaults.ageConfirmed,
                 imageLoading = prefs[Keys.imageLoading] ?: defaults.imageLoading,
                 slowMode = prefs[Keys.slowMode] ?: defaults.slowMode,
+                ignoredUpdateVersion = prefs[Keys.ignoredUpdateVersion],
             )
         }
 
@@ -96,6 +100,34 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAgeConfirmed(value: Boolean) = edit { it[Keys.ageConfirmed] = value }
     suspend fun setImageLoading(value: String) = edit { it[Keys.imageLoading] = value }
     suspend fun setSlowMode(value: Boolean) = edit { it[Keys.slowMode] = value }
+    suspend fun setIgnoredUpdateVersion(value: String?) = edit { prefs ->
+        if (value.isNullOrBlank()) prefs.remove(Keys.ignoredUpdateVersion)
+        else prefs[Keys.ignoredUpdateVersion] = value
+    }
+
+    /** Applies a backup in one write, so the UI never sees a half-restored state. */
+    suspend fun restore(settings: AppSettings) {
+        edit { prefs ->
+            prefs[Keys.theme] = settings.theme
+            prefs[Keys.dynamicColor] = settings.dynamicColor
+            prefs[Keys.fontFamily] = settings.fontFamily
+            prefs[Keys.fontSize] = settings.fontSizeSp.coerceIn(14, 26)
+            prefs[Keys.lineHeight] = settings.lineHeightMultiplier.coerceIn(1.2f, 2.0f)
+            prefs[Keys.justify] = settings.justifyText
+            prefs[Keys.readerWidth] = settings.readerWidth
+            prefs[Keys.keepScreenOn] = settings.keepScreenOn
+            prefs[Keys.defaultHomeTab] = settings.defaultHomeTab
+            prefs[Keys.defaultTopSort] = settings.defaultTopSort
+            prefs[Keys.defaultTopPeriod] = settings.defaultTopPeriod
+            prefs[Keys.defaultSearchType] = settings.defaultSearchType
+            prefs[Keys.ageConfirmed] = settings.ageConfirmed
+            prefs[Keys.imageLoading] = settings.imageLoading
+            prefs[Keys.slowMode] = settings.slowMode
+            val ignored = settings.ignoredUpdateVersion
+            if (ignored.isNullOrBlank()) prefs.remove(Keys.ignoredUpdateVersion)
+            else prefs[Keys.ignoredUpdateVersion] = ignored
+        }
+    }
 
     private suspend fun edit(block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         context.settingsDataStore.edit { prefs -> block(prefs) }

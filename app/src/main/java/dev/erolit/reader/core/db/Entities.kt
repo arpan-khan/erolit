@@ -95,7 +95,7 @@ data class LocalSavedEntity(
 )
 
 /**
- * A series the reader saved for offline browsing. The chapter metadata lives
+ * A series the reader saved for local browsing. The chapter metadata lives
  * in [LocalSeriesWorkEntity], so the series screen can render its table of
  * contents without a network request.
  */
@@ -143,6 +143,46 @@ data class LocalSeriesWorkEntity(
     val publishedAt: String?,
     val type: String?,
     val tags: String?,
+)
+
+/**
+ * One row per story the reader opened, with the moment it was last opened.
+ * Metadata is copied in so History still renders without a network request.
+ */
+@Entity(tableName = "history", indices = [Index("openedAt")])
+data class HistoryEntity(
+    @PrimaryKey val storyId: Long,
+    val slug: String?,
+    val title: String,
+    val authorId: Long?,
+    val authorName: String?,
+    val authorPic: String?,
+    val categoryId: Int?,
+    val categoryName: String?,
+    val description: String?,
+    val words: Int?,
+    val readingMinutes: Int?,
+    val rating: Double?,
+    val ratingCount: Int?,
+    val publishedAt: String?,
+    val type: String?,
+    val seriesId: Long?,
+    val seriesTitle: String?,
+    val tags: String?,
+    val openedAt: Long,
+)
+
+/** An author the reader saved on this device. Never tied to an account. */
+@Entity(tableName = "local_authors", indices = [Index("savedAt")])
+data class LocalAuthorEntity(
+    @PrimaryKey val authorId: Long,
+    val username: String,
+    val userpic: String?,
+    val bio: String?,
+    val followers: Int?,
+    val storiesCount: Int?,
+    val seriesCount: Int?,
+    val savedAt: Long,
 )
 
 @Entity(tableName = "categories")

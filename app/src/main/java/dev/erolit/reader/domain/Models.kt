@@ -56,6 +56,8 @@ data class SeriesSummary(
     val description: String?,
     val state: String?,
     val workCount: Int?,
+    /** Ids of the chapters that make up this series, when the source provides them. */
+    val workIds: List<Long> = emptyList(),
 )
 
 data class SeriesDetail(
@@ -134,6 +136,12 @@ data class RecentReading(
     val authorName: String?,
     val slug: String?,
     val type: String?,
+)
+
+/** A story the reader opened, with the time it was last opened. */
+data class HistoryEntry(
+    val story: StorySummary,
+    val openedAt: Long,
 )
 
 data class Category(

@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.erolit.reader.AppContainer
+import dev.erolit.reader.ui.common.WebTarget
 import dev.erolit.reader.ui.common.vmFactory
 import dev.erolit.reader.ui.components.Chip
 import dev.erolit.reader.ui.components.ChipRow
@@ -37,6 +38,7 @@ import dev.erolit.reader.ui.components.EmptyBox
 import dev.erolit.reader.ui.components.FeedList
 import dev.erolit.reader.ui.components.ScreenHeader
 import dev.erolit.reader.ui.components.StoryCard
+import dev.erolit.reader.ui.components.WebButton
 
 @Composable
 fun SearchScreen(
@@ -61,7 +63,16 @@ fun SearchScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        ScreenHeader(title = "Search", onBack = null)
+        ScreenHeader(title = "Search", onBack = null) {
+            if (query.isNotBlank()) {
+                WebButton(
+                    WebTarget(
+                        url = container.routes.searchWebUrl(query, type),
+                        title = "Search: $query",
+                    ),
+                )
+            }
+        }
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,

@@ -4,6 +4,68 @@ All notable changes to EroLit are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-11-12
+
+### Added
+
+- **Mark as read / Mark as unread** actions in story and series long-press
+  menus. Series actions update every chapter, and progress badges and list
+  contents refresh immediately.
+- Adaptive launcher icon with a custom background, foreground glyph, and an
+  Android 13+ monochrome variant for themed icons.
+- Animated splash screen built on the Android SplashScreen API. The app waits
+  for settings to load before smoothly transitioning into the main interface.
+- In-app WebView for browsing the original website, with JavaScript, cookies,
+  DOM storage, loading progress, reload, zoom, external link handling, and
+  in-page back navigation. Website shortcuts are available from story readers,
+  series, author profiles, categories, and search results.
+- Category warning cards for the **Audio** and **Illustrated** categories,
+  explaining that these formats are not supported in-app and linking directly
+  to the website.
+- Automatic GitHub release update checks on startup. New versions open an
+  Open GitHub / Ignore dialog, and ignored releases are remembered so they are
+  not announced again. Failed checks never interfere with startup.
+- Reading history under **My Lists**, recording each opened story once
+  per reading session with metadata and timestamps, sorted by most recently
+  opened.
+- **Saved Authors**, which can be bookmarked directly from author profiles and
+  appear under **My Lists → Local** with author details, removal actions, and
+  shortcuts to their profiles.
+- Backup export and import under **Settings → Backup** using a versioned JSON
+  format. Backups include saved stories and series, saved authors, reading
+  progress, read status, reading history, and app settings. Import supports
+  overwrite confirmation and backward-compatible defaults, and excludes
+  credentials and session data.
+
+### Changed
+
+- Renamed **Offline** to **Local** throughout the app, including tabs, save
+  actions, reader menus, empty states, and helper messages.
+- Series progress tracking now calculates completion as the average progress of
+  all chapters. Series correctly show 100% and the Read status once every
+  chapter is completed, in both lists and on the series screen.
+- Improved animations and transitions with smooth fade/slide navigation, tab
+  crossfades, animated bottom-bar visibility, list-item appearance and
+  repositioning animations, and smoother WebView loading and content
+  transitions.
+- Room database upgraded to version 4 with a migration that preserves existing
+  user data.
+
+### Fixed
+
+- Reader font selection on some devices. Six actual font files
+  (Serif, Sans, Mono, Cursive, Condensed, and Light) are now bundled, and the
+  reader and settings preview use the same font mappings.
+- The Chain Stories category failing to load because of numeric author names
+  and inconsistent API data types. Author names, usernames, and tags now use a
+  lenient JSON serializer, with a regression test.
+- Reading progress getting stuck at 99% after completing a chapter. Reliable
+  end-of-chapter detection, final 100% progress saving, and queued progress
+  writes prevent stale updates from overwriting completion status.
+- A reader navigation layout issue where the bottom navigation bar caused the
+  reading area to reflow when returning from the reader. The reader keeps its
+  full-screen layout while the bottom bar animates smoothly.
+
 ## [0.1.1] - 2026-11-10
 
 ### Added

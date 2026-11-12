@@ -7,7 +7,7 @@ An unofficial, ad-free Android reader for [Literotica](https://www.literotica.co
 
 > **18+ only.** EroLit displays adult fiction supplied by an external service. It is unofficial and is not affiliated with, endorsed by, or supported by Literotica. The app bundles no stories, images, or author content. Use it at your own risk and follow the upstream service's terms.
 
-**[Download the latest APK](https://github.com/arpan-khan/erolit/releases/latest)** · **[All releases](https://github.com/arpan-khan/erolit/releases)** · **[Source code](https://github.com/arpan-khan/erolit)**
+**[Download the latest APK](https://github.com/arpan-khan/erolit/releases/latest)** · **[All releases](https://github.com/arpan-khan/erolit/releases)** · **[Changelog](CHANGELOG.md)** · **[Source code](https://github.com/arpan-khan/erolit)**
 
 ## Features
 

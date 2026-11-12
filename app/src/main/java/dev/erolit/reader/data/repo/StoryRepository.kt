@@ -2,6 +2,7 @@ package dev.erolit.reader.data.repo
 
 import androidx.room.withTransaction
 import dev.erolit.reader.core.db.AppDatabase
+import dev.erolit.reader.core.db.HistoryEntity
 import dev.erolit.reader.core.db.LocalSavedEntity
 import dev.erolit.reader.core.db.LocalSeriesEntity
 import dev.erolit.reader.core.db.LocalSeriesWorkEntity
@@ -18,6 +19,7 @@ import dev.erolit.reader.data.categoryLabel
 import dev.erolit.reader.data.dto.StoryDetailDto
 import dev.erolit.reader.data.toSummary
 import dev.erolit.reader.domain.CachedStory
+import dev.erolit.reader.domain.HistoryEntry
 import dev.erolit.reader.domain.ProgressInfo
 import dev.erolit.reader.domain.RecentReading
 import dev.erolit.reader.domain.SeriesDetail
@@ -25,6 +27,7 @@ import dev.erolit.reader.domain.SeriesSummary
 import dev.erolit.reader.domain.StoryDetail
 import dev.erolit.reader.domain.StorySummary
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.decodeFromString
 
@@ -128,6 +131,69 @@ class StoryRepository(
         }
     }
 
+    /** Marks a story as finished without touching its saved position. */
+    suspend fun markStoryRead(storyId: Long) {
+        try {
+            db.progressDao().upsert(
+                ProgressEntity(
+                    storyId = storyId,
+                    page = 1,
+                    scrollFraction = 1f,
+                    percent = 1f,
+                    updatedAt = now(),
+                ),
+            )
+        } catch (e: Exception) {
+            // Marking read is best effort; never crash the UI over a DB write.
+        }
+    }
+
+    /** Clears a story's progress so it appears unread again. */
+    suspend fun markStoryUnread(storyId: Long) {
+        runCatching { db.progressDao().delete(storyId) }
+    }
+
+    /** Marks every chapter of a series as finished. */
+    suspend fun markSeriesRead(seriesId: Long, chapterIds: List<Long> = emptyList()) {
+        val ids = chapterIds.ifEmpty {
+            try {
+                db.localSeriesDao().works(seriesId).map { it.storyId }
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+        if (ids.isEmpty()) return
+        try {
+            val timestamp = now()
+            db.progressDao().upsertAll(
+                ids.map { storyId ->
+                    ProgressEntity(
+                        storyId = storyId,
+                        page = 1,
+                        scrollFraction = 1f,
+                        percent = 1f,
+                        updatedAt = timestamp,
+                    )
+                },
+            )
+        } catch (e: Exception) {
+            // Marking a series read is best effort.
+        }
+    }
+
+    /** Clears progress for every chapter of a series. */
+    suspend fun markSeriesUnread(seriesId: Long, chapterIds: List<Long> = emptyList()) {
+        val ids = chapterIds.ifEmpty {
+            try {
+                db.localSeriesDao().works(seriesId).map { it.storyId }
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+        if (ids.isEmpty()) return
+        runCatching { db.progressDao().deleteFor(ids) }
+    }
+
     fun observeRecent(): Flow<List<RecentReading>> =
         db.progressDao().observeRecent().map { rows -> rows.mapNotNull { it.toDomainOrNull() } }
 
@@ -153,13 +219,40 @@ class StoryRepository(
         runCatching { db.localSavedDao().delete(storyId) }
     }
 
+    /**
+     * Records that a story was opened. One row per story is kept, so opening
+     * a story again moves it to the top of History instead of duplicating it.
+     */
+    suspend fun recordHistory(story: StorySummary) {
+        try {
+            db.historyDao().upsert(story.toHistoryEntity(now()))
+        } catch (e: Exception) {
+            // History is best effort; never crash the reader over a DB write.
+        }
+    }
+
+    /** Every story the reader opened, most recent first. */
+    fun observeHistory(): Flow<List<HistoryEntry>> =
+        db.historyDao().observeAll().map { rows -> rows.map { it.toDomain() } }
+
+    suspend fun clearHistory() {
+        runCatching { db.historyDao().clear() }
+    }
+
     suspend fun clearCachedPages() {
         runCatching { db.storyDao().clearAllPages() }
     }
 
-    /** Series saved for offline browsing, newest first. */
+    /** Series saved for local browsing, newest first. */
     fun observeLocalSeries(): Flow<List<SeriesSummary>> =
-        db.localSeriesDao().observeAll().map { rows -> rows.map { it.toSummary() } }
+        combine(
+            db.localSeriesDao().observeAll(),
+            db.localSeriesDao().observeAllWorks(),
+        ) { rows, works ->
+            val idsBySeries = works.groupBy { it.seriesId }
+                .mapValues { (_, items) -> items.sortedBy { it.position }.map { it.storyId } }
+            rows.map { row -> row.toSummary(idsBySeries[row.seriesId].orEmpty()) }
+        }
 
     suspend fun localSeries(seriesId: Long): SeriesDetail? = try {
         val row = db.localSeriesDao().find(seriesId) ?: return null
@@ -328,7 +421,56 @@ class StoryRepository(
         tags = tags.decodeTags(),
     )
 
-    private fun LocalSeriesEntity.toSummary(): SeriesSummary = SeriesSummary(
+    private fun StorySummary.toHistoryEntity(openedAt: Long): HistoryEntity = HistoryEntity(
+        storyId = id,
+        slug = slug,
+        title = title,
+        authorId = authorId,
+        authorName = authorName,
+        authorPic = authorPic,
+        categoryId = categoryId,
+        categoryName = categoryName,
+        description = description,
+        words = words,
+        readingMinutes = readingMinutes,
+        rating = rating,
+        ratingCount = ratingCount,
+        publishedAt = publishedAt,
+        type = type,
+        seriesId = seriesId,
+        seriesTitle = seriesTitle,
+        tags = tags.encodeTags(),
+        openedAt = openedAt,
+    )
+
+    private fun HistoryEntity.toDomain(): HistoryEntry = HistoryEntry(
+        story = StorySummary(
+            id = storyId,
+            slug = slug,
+            title = title,
+            authorId = authorId,
+            authorName = authorName,
+            authorPic = authorPic,
+            categoryId = categoryId,
+            categoryName = categoryName,
+            description = description,
+            words = words,
+            readingMinutes = readingMinutes,
+            rating = rating,
+            ratingCount = ratingCount,
+            publishedAt = publishedAt,
+            type = type,
+            isHot = false,
+            isNew = false,
+            writersPick = false,
+            seriesId = seriesId,
+            seriesTitle = seriesTitle,
+            tags = tags.decodeTags(),
+        ),
+        openedAt = openedAt,
+    )
+
+    private fun LocalSeriesEntity.toSummary(workIds: List<Long>): SeriesSummary = SeriesSummary(
         id = seriesId,
         url = null,
         title = title,
@@ -337,6 +479,7 @@ class StoryRepository(
         description = description,
         state = state,
         workCount = workCount,
+        workIds = workIds,
     )
 
     private fun LocalSeriesWorkEntity.toSummary(seriesTitle: String): StorySummary = StorySummary(

@@ -9,6 +9,7 @@ import dev.erolit.reader.domain.StorySummary
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,7 +26,7 @@ data class ReaderState(
     val text: String = "",
     val restoreFraction: Float = 0f,
     val summary: StorySummary? = null,
-    val savedOffline: Boolean = false,
+    val savedLocally: Boolean = false,
 )
 
 class ReaderViewModel(
@@ -40,6 +41,46 @@ class ReaderViewModel(
     private var job: Job? = null
     private var lastRequested = 1
     private var lastFraction = 0f
+
+    /** History records the opening, not every page turn. */
+    private var historyRecorded = false
+
+    /**
+     * Set once the reader has reached the end of the last page. From then on
+     * every queued write is forced to 100%, so a late debounce or a teardown
+     * save computed from a resized viewport cannot lower a finished chapter.
+     */
+    private var completed = false
+
+    private data class PendingProgress(
+        val page: Int,
+        val fraction: Float,
+        val pagesCount: Int,
+    )
+
+    /**
+     * Progress writes are funnelled through one conflated queue. Without this,
+     * a delayed debounce write from an earlier scroll position can land after
+     * the final 100% write and make a finished chapter fall back to 99%.
+     */
+    private val pendingProgress = Channel<PendingProgress>(Channel.CONFLATED)
+    private var latestProgress: PendingProgress? = null
+    private val progressWriter = appScope.launch {
+        for (request in pendingProgress) {
+            try {
+                stories.saveProgress(
+                    storyId,
+                    request.page,
+                    request.fraction,
+                    request.pagesCount,
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // Progress is best effort; never crash the reader over a DB write.
+            }
+        }
+    }
 
     init {
         job = viewModelScope.launch {
@@ -81,9 +122,10 @@ class ReaderViewModel(
                 text = detail.text,
                 restoreFraction = restore,
                 summary = detail.summary,
-                savedOffline = stories.isLocalSaved(storyId),
+                savedLocally = stories.isLocalSaved(storyId),
             )
-            stories.saveProgress(storyId, detail.page, restore, detail.pagesCount)
+            recordOpened(detail.summary)
+            enqueueProgress(detail.page, restore, detail.pagesCount)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -101,8 +143,9 @@ class ReaderViewModel(
                     text = cachedPage.text,
                     restoreFraction = fraction,
                     summary = cachedStory.summary,
-                    savedOffline = stories.isLocalSaved(storyId),
+                    savedLocally = stories.isLocalSaved(storyId),
                 )
+                recordOpened(cachedStory.summary)
             } else {
                 _state.update { it.copy(loading = false, error = e.toApiError()) }
             }
@@ -112,6 +155,12 @@ class ReaderViewModel(
     private fun go(page: Int, fraction: Float = 0f) {
         job?.cancel()
         job = viewModelScope.launch { load(page, fraction) }
+    }
+
+    private fun recordOpened(summary: StorySummary) {
+        if (historyRecorded) return
+        historyRecorded = true
+        viewModelScope.launch { stories.recordHistory(summary) }
     }
 
     fun next() {
@@ -126,32 +175,54 @@ class ReaderViewModel(
 
     fun retry() = go(lastRequested, lastFraction)
 
+    private fun enqueueProgress(page: Int, fraction: Float, pagesCount: Int) {
+        val request = if (completed) {
+            val pages = pagesCount.coerceAtLeast(1)
+            PendingProgress(pages, 1f, pages)
+        } else {
+            PendingProgress(page, fraction, pagesCount)
+        }
+        latestProgress = request
+        pendingProgress.trySend(request)
+    }
+
+    /** Marks the current chapter as finished and keeps it at 100% for this session. */
+    fun markCompleted() {
+        val s = _state.value
+        if (s.loading || s.text.isEmpty() || s.error != null) return
+        completed = true
+        enqueueProgress(s.pagesCount, 1f, s.pagesCount)
+    }
+
     fun saveScroll(fraction: Float) {
         val s = _state.value
         if (s.loading || s.text.isEmpty() || s.error != null) return
-        appScope.launch {
-            try {
-                stories.saveProgress(storyId, s.page, fraction, s.pagesCount)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                // progress is best effort
-            }
+        if (completed) {
+            enqueueProgress(s.pagesCount, 1f, s.pagesCount)
+        } else {
+            enqueueProgress(s.page, fraction, s.pagesCount)
         }
     }
 
-    fun saveOffline() {
+    override fun onCleared() {
+        // Make sure the final position is queued before the worker stops.
+        latestProgress?.let { pendingProgress.trySend(it) }
+        pendingProgress.close()
+        super.onCleared()
+    }
+
+    fun saveLocally() {
         val summary = _state.value.summary ?: return
         viewModelScope.launch {
             stories.saveLocal(summary)
-            _state.update { it.copy(savedOffline = true) }
+            _state.update { it.copy(savedLocally = true) }
         }
     }
 
-    fun removeOffline() {
+    fun removeLocally() {
         viewModelScope.launch {
             stories.removeLocal(storyId)
-            _state.update { it.copy(savedOffline = false) }
+            _state.update { it.copy(savedLocally = false) }
         }
     }
 }

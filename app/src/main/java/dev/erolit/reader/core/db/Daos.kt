@@ -54,11 +54,23 @@ interface ProgressDao {
     @Upsert
     suspend fun upsert(progress: ProgressEntity)
 
+    @Upsert
+    suspend fun upsertAll(items: List<ProgressEntity>)
+
+    @Query("DELETE FROM progress WHERE storyId = :storyId")
+    suspend fun delete(storyId: Long)
+
+    @Query("DELETE FROM progress WHERE storyId IN (:ids)")
+    suspend fun deleteFor(ids: List<Long>)
+
     @Query("SELECT * FROM progress WHERE storyId IN (:ids)")
     suspend fun findFor(ids: List<Long>): List<ProgressEntity>
 
     @Query("SELECT * FROM progress")
     fun observeAll(): Flow<List<ProgressEntity>>
+
+    @Query("SELECT * FROM progress")
+    suspend fun all(): List<ProgressEntity>
 
     @Query(
         """
@@ -93,11 +105,17 @@ interface LocalSavedDao {
     @Query("SELECT * FROM local_saved ORDER BY savedAt DESC")
     fun observeAll(): Flow<List<LocalSavedEntity>>
 
+    @Query("SELECT * FROM local_saved")
+    suspend fun all(): List<LocalSavedEntity>
+
     @Query("SELECT * FROM local_saved WHERE storyId = :storyId")
     suspend fun find(storyId: Long): LocalSavedEntity?
 
     @Upsert
     suspend fun upsert(item: LocalSavedEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(items: List<LocalSavedEntity>)
 
     @Query("DELETE FROM local_saved WHERE storyId = :storyId")
     suspend fun delete(storyId: Long)
@@ -111,14 +129,26 @@ interface LocalSeriesDao {
     @Query("SELECT * FROM local_series ORDER BY savedAt DESC")
     fun observeAll(): Flow<List<LocalSeriesEntity>>
 
+    @Query("SELECT * FROM local_series")
+    suspend fun allSeries(): List<LocalSeriesEntity>
+
+    @Query("SELECT * FROM local_series_works")
+    suspend fun allWorks(): List<LocalSeriesWorkEntity>
+
     @Query("SELECT * FROM local_series WHERE seriesId = :seriesId")
     suspend fun find(seriesId: Long): LocalSeriesEntity?
 
     @Upsert
     suspend fun upsertSeries(series: LocalSeriesEntity)
 
+    @Upsert
+    suspend fun upsertSeriesList(series: List<LocalSeriesEntity>)
+
     @Query("SELECT * FROM local_series_works WHERE seriesId = :seriesId ORDER BY position")
     suspend fun works(seriesId: Long): List<LocalSeriesWorkEntity>
+
+    @Query("SELECT * FROM local_series_works ORDER BY seriesId, position")
+    fun observeAllWorks(): Flow<List<LocalSeriesWorkEntity>>
 
     @Query("DELETE FROM local_series_works WHERE seriesId = :seriesId")
     suspend fun clearWorks(seriesId: Long)
@@ -128,6 +158,51 @@ interface LocalSeriesDao {
 
     @Query("DELETE FROM local_series WHERE seriesId = :seriesId")
     suspend fun delete(seriesId: Long)
+
+    @Query("DELETE FROM local_series")
+    suspend fun clearAll()
+}
+
+@Dao
+interface LocalAuthorDao {
+    @Query("SELECT * FROM local_authors ORDER BY savedAt DESC")
+    fun observeAll(): Flow<List<LocalAuthorEntity>>
+
+    @Query("SELECT * FROM local_authors")
+    suspend fun all(): List<LocalAuthorEntity>
+
+    @Query("SELECT * FROM local_authors WHERE authorId = :authorId")
+    suspend fun find(authorId: Long): LocalAuthorEntity?
+
+    @Upsert
+    suspend fun upsert(item: LocalAuthorEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(items: List<LocalAuthorEntity>)
+
+    @Query("DELETE FROM local_authors WHERE authorId = :authorId")
+    suspend fun delete(authorId: Long)
+
+    @Query("DELETE FROM local_authors")
+    suspend fun clear()
+}
+
+@Dao
+interface HistoryDao {
+    @Query("SELECT * FROM history ORDER BY openedAt DESC")
+    fun observeAll(): Flow<List<HistoryEntity>>
+
+    @Query("SELECT * FROM history")
+    suspend fun all(): List<HistoryEntity>
+
+    @Upsert
+    suspend fun upsert(item: HistoryEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(items: List<HistoryEntity>)
+
+    @Query("DELETE FROM history")
+    suspend fun clear()
 }
 
 @Dao

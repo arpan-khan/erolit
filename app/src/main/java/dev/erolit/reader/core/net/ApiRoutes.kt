@@ -6,6 +6,7 @@ data class ApiConfig(
     val apiBase: String = "https://literotica.com/api/3",
     val authBase: String = "https://auth.literotica.com",
     val wwwBase: String = "https://www.literotica.com",
+    val searchBase: String = "https://search.literotica.com",
 )
 
 /**
@@ -63,4 +64,44 @@ class ApiRoutes(private val config: ApiConfig) {
     fun shareStoryUrl(slug: String): String = config.wwwBase + "/s/" + slug
 
     fun loginOrigin(): String = config.wwwBase
+
+    // Human-facing website pages, matching the exact upstream pages the JSON
+    // endpoints mirror. Used by the in-app WebView.
+    fun storyWebUrl(slug: String): String =
+        (config.wwwBase + "/s/").toHttpUrl().newBuilder()
+            .addPathSegment(slug.trim())
+            .build()
+            .toString()
+
+    fun seriesWebUrl(slug: String): String =
+        (config.wwwBase + "/series/se/").toHttpUrl().newBuilder()
+            .addPathSegment(slug.trim())
+            .build()
+            .toString()
+
+    fun authorWebUrl(username: String): String =
+        (config.wwwBase + "/authors/").toHttpUrl().newBuilder()
+            .addPathSegment(username.trim())
+            .addPathSegment("works")
+            .addPathSegment("stories")
+            .build()
+            .toString()
+
+    fun categoryWebUrl(pageUrl: String): String =
+        (config.wwwBase + "/c/").toHttpUrl().newBuilder()
+            .addPathSegment(pageUrl.trim())
+            .build()
+            .toString()
+
+    fun searchWebUrl(query: String, type: String?): String =
+        config.searchBase.toHttpUrl().newBuilder()
+            .apply {
+                when (type) {
+                    "poems" -> addQueryParameter("type", "poem")
+                    "members" -> addQueryParameter("type", "member")
+                }
+                if (query.isNotBlank()) addQueryParameter("query", query.trim())
+            }
+            .build()
+            .toString()
 }
